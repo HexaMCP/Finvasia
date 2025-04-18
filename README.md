@@ -16,4 +16,3 @@ More features and modules will be added progressively.
 
 - **Backend**: Node.js
 - **Broker API**: Finvasia Shoonya (MCP)
-- **Environment Management**: `.env`
