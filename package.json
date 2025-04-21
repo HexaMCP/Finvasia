@@ -1,0 +1,27 @@
+{
+  "name": "finvasia",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.10.1",
+    "axios": "^1.8.4",
+    "crypto-js": "^4.2.0",
+    "dotenv": "^16.5.0",
+    "speakeasy": "^2.0.0",
+    "zod": "^3.24.3",
+    "zod-to-json-schema": "^3.24.5"
+  },
+  "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
+    "@types/speakeasy": "^2.0.10",
+    "ts-node": "^10.9.2"
+  }
+}
