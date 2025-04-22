@@ -10,7 +10,7 @@ import { getProfile } from "./services/users/profile";
 import { checkBalance } from "./services/users/balance";
 import { getWatchlist } from "./services/stocks/watchlist";
 import { getQuotes, getStockList } from "./services/stocks/stocklist";
-import { cancelOrder, checkOrderStatus, getHoldings, getOrderBook, getOrderMargin, getPositions, placeOrder } from "./services/orders/order";
+import { cancelOrder, checkOrderStatus, getHoldings, getOrderBook, getOrderHistory, getOrderMargin, getPositions, placeOrder } from "./services/orders/order";
 
 
 const server = new Server(
@@ -98,6 +98,10 @@ const orderBookSchema = z.object({
   prd: z.string().describe("Product name filter (C / M / H , C For CNC, M FOR NRML, I FOR MIS, B FOR BRACKET ORDER, H FOR COVER ORDER)")
 });
 
+const SingleOrderHistorySchema = z.object({
+  norenordno: z.string().describe("Order Number"),
+});
+
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -162,6 +166,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "Get_Order_Book",
         description: "Order book details, get order book, or show order book",
         inputSchema: zodToJsonSchema(orderBookSchema),
+      },
+      {
+        name: "Get_Order_History",
+        description: "Get the detailed order history of a specific order by its order number",
+        inputSchema: zodToJsonSchema(SingleOrderHistorySchema),
       }
     ],
   };
@@ -359,7 +368,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             content: [
               {
                 type: "text",
-                text: `order not placed, ensure all needed details are provided ${JSON.stringify(request.params.arguments, null, 2)}`,
+                text: `order not placed, ensure all needed details are provided ${JSON.stringify(orderResult, null, 2)}`,
               },
             ],
           };
@@ -508,7 +517,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             content: [
               {
                 type: "text",
-                text: `couldn’t get holdings at the moment ${JSON.stringify(holdingsResponse, null, 2)}`,
+                text: `${JSON.stringify(holdingsResponse, null, 2)}`,
               },
             ],
           };
@@ -560,7 +569,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             content: [
               {
                 type: "text",
-                text: `couldn’t get order margin at the moment ${JSON.stringify(marginResponse, null, 2)}`,
+                text: `${JSON.stringify(marginResponse, null, 2)}`,
               },
             ],
           };
@@ -597,7 +606,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             content: [
               {
                 type: "text",
-                text: `couldn’t get order book at the moment ${JSON.stringify(orderBookResponse, null, 2)}`,
+                text: `${JSON.stringify(orderBookResponse, null, 2)}`,
               },
             ],
           };
@@ -613,7 +622,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           };
         }
       }
-
+      case "Get_Order_History": {
+        const { norenordno } = request.params.arguments as { norenordno: string };
+        const orderHistory = await getOrderHistory({ norenordno });
+        
+        if (typeof orderHistory === "object" && orderHistory !== null && "stat" in orderHistory && orderHistory["stat"] === "Ok") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(orderHistory, null, 2),
+              },
+            ],
+          };
+        }
+        return {
+          content: [
+            {
+              type: "text",
+              text: `${JSON.stringify(orderHistory, null, 2)}`,
+            },
+          ],
+        };
+      }
       default:
         throw new Error(`Unknown tool: ${request.params.name}`);
     }

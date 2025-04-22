@@ -409,3 +409,66 @@ export const getOrderBook = async (params: OrderBookParams = {}): Promise<OrderB
     };
   }
 };
+
+interface SingleOrderHistoryParams {
+  norenordno: string;
+}
+
+interface SingleOrderHistoryResponse {
+  [key: string]: any;
+
+}
+
+export const getOrderHistory = async (params: SingleOrderHistoryParams): Promise<SingleOrderHistoryResponse> => {
+  console.log('Fetching single order history');
+ 
+  // Get credentials from environment variables
+  const config: ConfigType = {
+    id: process.env.ID || "",
+    password: process.env.PASSWORD || "",
+    api_key: process.env.API_KEY || "",
+    vendor_key: process.env.VENDOR_KEY || "",
+    imei: process.env.IMEI || "",
+    topt: process.env.TOTP || "",
+  };
+ 
+  try {
+    // Authenticate first to get the token
+    const token = await rest_authenticate(config);
+ 
+    if (!token || token.length === 0) {
+      console.log('Token is empty');
+      return {
+        stat: "Not_Ok",
+        message: "Token generation issue"
+      };
+    }
+ 
+    // Create the request parameters
+    const orderHistoryParams = {
+      uid: config.id,
+      norenordno: params.norenordno
+    };
+ 
+    // Construct the payload
+    let payload = 'jData=' + JSON.stringify(orderHistoryParams);
+    payload = payload + `&jKey=${token}`;
+ 
+    console.log('Requesting single order history with params:', {
+      norenordno: params.norenordno
+    });
+    
+    const historyResponse = await axios.post(conf.BASE_URL + '/SingleOrdHist', payload);
+    console.log('Single order history response received');
+ 
+    return historyResponse.data;
+  } catch (error: any) {
+    console.error('Error fetching single order history:', error);
+    return {
+      stat: "Not_Ok",
+      request_time: new Date().toISOString(),
+      emsg: error.message || "An error occurred while fetching order history",
+      error_details: error.response ? error.response.data : null
+    };
+  }
+};
