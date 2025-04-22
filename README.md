@@ -82,7 +82,8 @@ In your mcp config json, add the following configuration block:
 ```
 🗂️ Where to add this configuration:
 
-For VS Code users, this config should be placed inside your settings.json
+For VS Code users, this config should be placed inside your settings.json.
+
 Replace "Path of your index.js" with the actual relative path to the built file, e.g., dist/index.js.
 
 
