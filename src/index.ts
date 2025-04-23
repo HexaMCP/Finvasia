@@ -37,18 +37,27 @@ const placeOrderSchema = z.object({
   tsym: z.string().describe("Trading symbol, stock symbol"),
   qty: z.number().describe("Order quantity"),
   prc: z.string().optional().describe("Order price"),
+  prctyp: z
+  .enum(["LMT", "MKT", "SL-LMT", "SL-MKT", "DS", "2L", "3L"])
+  .optional()
+  .describe("Price type"),
+  prd: z.enum(["C", "M", "I", "B", "H"]).optional().describe("Product type (C / M / H / I/ B, C For CNC, M FOR NRML, I FOR MIS, B FOR BRACKET ORDER, H FOR COVER ORDER)"),
   trgprc: z
     .string()
     .optional()
-    .describe("Trigger price (for SL/SL-M orders)"),
+    .describe("Trigger price (if price type is SL-LMT/SL-MKT orders)"),
   dscqty: z.number().optional().describe("Disclosed quantity"),
-  prd: z.enum(["C", "M", "I", "B", "H"]).optional().describe("Product type (C / M / H , C For CNC, M FOR NRML, I FOR MIS, B FOR BRACKET ORDER, H FOR COVER ORDER)"),
   trantype: z.enum(["B", "S"]).describe("B for Buy, S for Sell"),
-  prctyp: z
-    .enum(["LMT", "MKT", "SL-LMT", "SL-MKT", "DS", "2L", "3L"])
-    .optional()
-    .describe("Price type"),
   ret: z.enum(["DAY", "EOS", "IOC"]).optional().describe("Retention type"),
+  bpprc: z.string().optional().describe(
+    "Book profit price (optional)."
+  ),
+  blprc: z.string().optional().describe(
+    "Stop loss price (optional)."
+  ),
+  trailprc: z.string().optional().describe(
+    "Trailing stop loss price (optional)."
+  ),
   remarks: z.string().optional().describe("Remarks for the order"),
 });
 
@@ -76,7 +85,7 @@ const positionsSchema = z.object({
 
 const holdingsSchema = z.object({
   actid: z.string().describe("Account ID"),
-  prd: z.string().optional().describe("Product name (C / M / H , C For CNC, M FOR NRML, I FOR MIS, B FOR BRACKET ORDER, H FOR COVER ORDER)"),
+  prd: z.enum(["C", "M", "I", "B", "H"]).optional().describe("Product name (C / M / H , C For CNC, M FOR NRML, I FOR MIS, B FOR BRACKET ORDER, H FOR COVER ORDER)"),
 });
 
 const orderMarginSchema = z.object({
@@ -85,7 +94,7 @@ const orderMarginSchema = z.object({
   tsym: z.string().describe("Trading symbol"),
   qty: z.union([z.string(), z.number()]).describe("Order quantity"),
   prc: z.union([z.string(), z.number()]).describe("Order price"),
-  prd: z.string().describe("Product type (e.g., C / M / H , C For CNC, M FOR NRML, I FOR MIS, B FOR BRACKET ORDER, H FOR COVER ORDER)"),
+  prd: z.enum(["C", "M", "I", "B", "H"]).describe("Product type (e.g., C / M / H , C For CNC, M FOR NRML, I FOR MIS, B FOR BRACKET ORDER, H FOR COVER ORDER)"),
   trantype: z.string().describe("Transaction type (B for Buy, S for Sell)"),
   prctyp: z.string().describe("Price type (LMT, MKT, SL-LMT, SL-MKT)"),
   // trgprc: z.union([z.string(), z.number()]).optional().describe("Trigger price (required for SL orders)"),
@@ -95,7 +104,7 @@ const orderMarginSchema = z.object({
 });
 
 const orderBookSchema = z.object({
-  prd: z.string().describe("Product name filter (C / M / H , C For CNC, M FOR NRML, I FOR MIS, B FOR BRACKET ORDER, H FOR COVER ORDER)")
+  prd: z.enum(["C", "M", "I", "B", "H"]).describe("Product name filter (C / M / H , C For CNC, M FOR NRML, I FOR MIS, B FOR BRACKET ORDER, H FOR COVER ORDER)")
 });
 
 const SingleOrderHistorySchema = z.object({
@@ -321,13 +330,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "Finvasia_Place_Order": {
         const params = request.params.arguments;
         if (!params) {
-          throw new Error("Invalid request: 'params' is undefined.");
+          throw new Error("Provide all needed details to place an order");
         }
         try {
           const defaults = {
             ret: "DAY",
             prd: "C",
-            prctyp: params.prc ? "LMT" : "MKT", // Default to LMT if price is provided, else MKT
+            prctyp: params.prctyp ? params.prctyp : params.prc ? "LMT" : "MKT", // Default to LMT if price is provided, else MKT
           };
 
           const orderPayload = {
@@ -342,6 +351,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             prctyp: String(params.prctyp || defaults.prctyp),
             ret: String(params.ret || defaults.ret),
             remarks: String(params.remarks || ""),
+            blprc: String(params.blprc || ""), // Default to "0" if not provided
+            bpprc: String(params.bpprc || ""), // Default to "0" if not provided
+            trailprc: String(params.trailprc || ""), // Default to "0" if not provided
           };
 
           const orderResult = await placeOrder(orderPayload);
@@ -374,7 +386,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           };
 
         } catch (err) {
-          console.error("Error searching stocks:", err);
+          console.error("Error placing order:", err);
           return {
             content: [
               {
@@ -500,7 +512,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "Finvasia_Holdings": {
         const { actid, prd } = request.params.arguments as { actid?: string; prd?: string };
         try {
-          const holdingsResponse = await getHoldings({ actid, prd });
+          const holdingsResponse = await getHoldings({ actid, prd: prd ? prd : "C" });
 
           if (typeof holdingsResponse === "object" && holdingsResponse !== null && "stat" in holdingsResponse && holdingsResponse["stat"] === "Ok") {
             return {
@@ -539,7 +551,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           tsym: String(args.tsym || ''),
           qty: args.qty as string | number,
           prc: args.prc as string | number,
-          prd: String(args.prd || ''),
+          prd: String(args.prd || 'C'),
           trantype: String(args.trantype || ''),
           prctyp: String(args.prctyp || ''),
           actid: args.actid as string,
@@ -589,7 +601,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         try {
           // Fetch order book data
-          const orderBookResponse = await getOrderBook({ prd });
+          const orderBookResponse = await getOrderBook({ prd: prd ? prd : "C" });
 
           if (typeof orderBookResponse === "object" && orderBookResponse !== null && "stat" in orderBookResponse && orderBookResponse["stat"] === "Ok") {
             return {
