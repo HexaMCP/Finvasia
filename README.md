@@ -4,16 +4,26 @@ A Node.js-based server that connects to **Finvasia's Market Connect Protocol (MC
 
 ## 📌 Current Features
 
+## 📌 Current Features
+
 - 👤 Fetch **User Profile Data**
 - 💰 Fetch **Account Balance**
 - 🟢 **Buy Orders**
 - 🔴 **Sell Orders**
 - ❌ **Cancel Orders**
+- ✏️ **Modify Orders**
 - 📈 **Current Stock Prices**
 - 📊 **Positions**
 - 💼 **Holdings**
 - 💸 **Order Margin**
 - 📚 **Order Book**
+- 📒 **Trade Book**
+- 🎯 **Take Profit** Orders
+- 🛑 **Stop Loss** Orders
+- 🧠 **Options Buy & Sell**
+
+More features and modules will be added progressively.
+
 
 More features and modules will be added progressively.
 
