@@ -10,7 +10,7 @@ import { getProfile } from "./services/users/profile";
 import { checkBalance } from "./services/users/balance";
 import { getWatchlist } from "./services/stocks/watchlist";
 import { getQuotes, getStockList } from "./services/stocks/stocklist";
-import { cancelOrder, checkOrderStatus, getHoldings, getOrderBook, getOrderMargin, getPositions, placeOrder } from "./services/orders/order";
+import { cancelOrder, checkOrderStatus, getHoldings, getOrderBook, getOrderMargin, getPositions, placeOrder , getTradeBook, modifyOrder} from "./services/orders/order";
 
 
 const server = new Server(
@@ -22,7 +22,7 @@ const server = new Server(
     capabilities: {
       tools: {},
     },
-  }
+  } 
 );
 
 const searchStocksSchema = z.object({
@@ -98,6 +98,23 @@ const orderBookSchema = z.object({
   prd: z.string().describe("Product name filter (C / M / H , C For CNC, M FOR NRML, I FOR MIS, B FOR BRACKET ORDER, H FOR COVER ORDER)")
 });
 
+const TradeBookSchema = z.object({
+  actid: z.string().optional().describe("Account ID (optional)")
+});
+
+const ModifyOrderSchema = z.object({
+  exch: z.string().describe("Exchange"),
+  norenordno: z.string().describe("Noren order number to modify"),
+  prctyp: z.string().optional().describe("Price type (LMT/MKT/SL-MKT/SL-LMT)"),
+  prc: z.string().optional().describe("Modified price"),
+  qty: z.string().optional().describe("Modified quantity"),
+  tsym: z.string().describe("Trading symbol (must be the same as original order)"),
+  ret: z.string().optional().describe("Retention type (DAY/IOC/EOS)"),
+  trgprc: z.string().optional().describe("Trigger price for SL-MKT or SL-LMT"),
+  bpprc: z.string().optional().describe("Book profit price (for Bracket orders)"),
+  blprc: z.string().optional().describe("Book loss price (for High Leverage and Bracket orders)"),
+  trailprc: z.string().optional().describe("Trailing price (for High Leverage and Bracket orders)")
+});
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -162,6 +179,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "Get_Order_Book",
         description: "Order book details, get order book, or show order book",
         inputSchema: zodToJsonSchema(orderBookSchema),
+      }, {
+        name: "Finvasia_TradeBook",
+        description: "Get the trade book showing all executed trades for the account",
+        inputSchema: zodToJsonSchema(TradeBookSchema),
+      } , {
+        name: "Finvasia_ModifyOrder",
+        description: "Modify an existing open order",
+        inputSchema: zodToJsonSchema(ModifyOrderSchema),
       }
     ],
   };
@@ -614,6 +639,95 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
+      case "Finvasia_TradeBook": {
+        const tradeBook = await getTradeBook();
+        
+        if (!tradeBook || tradeBook.stat === "Not_Ok") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Failed to retrieve trade book: ${tradeBook?.emsg || "Unknown error"}`,
+              },
+            ],
+          };
+        }
+        
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(tradeBook, null, 2),
+            },
+          ],
+        };
+      }
+      case "Finvasia_ModifyOrder": {
+        const params = request.params.arguments;
+        if (!params) {
+          throw new Error("Invalid request: 'params' is undefined.");
+        }
+        
+        try {
+          // Set defaults if parameters are missing
+          const defaults = {
+            ret: "DAY",
+            prctyp: params.prc ? "LMT" : "MKT", // Default to LMT if price is provided, else MKT
+          };
+          
+          // Create the modify payload with proper type casting
+          const modifyPayload = {
+            exch: String(params.exch),
+            norenordno: String(params.norenordno),
+            tsym: String(params.tsym),
+            // Only add optional parameters if they are provided
+            ...(params.qty !== undefined ? { qty: String(params.qty) } : {}),
+            ...(params.prc !== undefined ? { prc: String(params.prc) } : {}),
+            ...(params.prctyp !== undefined ? { prctyp: String(params.prctyp) } : { prctyp: defaults.prctyp }),
+            ...(params.ret !== undefined ? { ret: String(params.ret) } : { ret: defaults.ret }),
+            ...(params.trgprc !== undefined ? { trgprc: String(params.trgprc) } : {}),
+            ...(params.bpprc !== undefined ? { bpprc: String(params.bpprc) } : {}),
+            ...(params.blprc !== undefined ? { blprc: String(params.blprc) } : {}),
+            ...(params.trailprc !== undefined ? { trailprc: String(params.trailprc) } : {})
+          };
+          
+          // Call the modifyOrder function
+          const modifyResult = await modifyOrder(modifyPayload);
+          
+          // Check if modification was successful
+          if (typeof modifyResult === "object" && modifyResult !== null && 
+              "stat" in modifyResult && modifyResult["stat"] === "Ok") {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Order modified successfully: ${JSON.stringify(modifyResult, null, 2)}`,
+                },
+              ],
+            };
+          }
+          
+          // Return error if modification failed
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Order not modified: ${JSON.stringify(modifyResult, null, 2)}. Ensure all needed details are provided: ${JSON.stringify(params, null, 2)}`,
+              },
+            ],
+          };
+        } catch (err) {
+          console.error("Error modifying order:", err);
+          return {
+            content: [
+              {
+                type: "text",
+                text: `An error occurred while modifying the order`,
+              },
+            ],
+          };
+        }
+      }
       default:
         throw new Error(`Unknown tool: ${request.params.name}`);
     }

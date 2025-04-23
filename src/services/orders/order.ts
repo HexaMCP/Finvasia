@@ -409,3 +409,136 @@ export const getOrderBook = async (params: OrderBookParams = {}): Promise<OrderB
     };
   }
 };
+
+interface TradeBookParams {
+  actid?: string;  
+}
+
+interface TradeBookResponse {
+  stat: string;
+  [key: string]: any;
+}
+
+// Function to fetch the trade book
+
+export const getTradeBook = async (): Promise<TradeBookResponse> => {
+  console.log('Fetching trade book');
+
+  const config: ConfigType = {
+    id: process.env.ID || "",
+    password: process.env.PASSWORD || "",
+    api_key: process.env.API_KEY || "",
+    vendor_key: process.env.VENDOR_KEY || "",
+    imei: process.env.IMEI || "",
+    topt: process.env.TOTP || "",
+  };
+
+  try {
+    const token = await rest_authenticate(config);
+
+    if (!token || token.length === 0) {
+      console.log('Token is empty');
+      return {
+        stat: "Not_Ok",
+        message: "Token generation issue"
+      };
+    }
+
+    const tradeBookParams = {
+      uid: config.id,
+      actid: config.id 
+    };
+
+    let payload = 'jData=' + JSON.stringify(tradeBookParams);
+    payload = payload + `&jKey=${token}`;
+
+    console.log('Requesting trade book with params:', {
+      actid: tradeBookParams.actid
+    });
+    const tradeBookResponse = await axios.post(conf.TRADE_BOOK_URL, payload);
+    console.log('Trade book response received');
+
+    return tradeBookResponse.data;
+  } catch (error: any) {
+    console.error('Error fetching trade book:', error);
+    return {
+      stat: "Not_Ok",
+      request_time: new Date().toISOString(),
+      emsg: error.message || "An error occurred while fetching trade book",
+      error_details: error.response ? error.response.data : null
+    };
+  }
+};
+
+
+// Interface for Modify Order payload
+interface ModifyPayload {
+  uid?: string;                // User ID
+  exch: string;                // Exchange
+  norenordno: string;          // Noren order number to modify
+  prctyp?: string;             // Price type (LMT/MKT/SL-MKT/SL-LMT)
+  prc?: string | number;       // Modified price
+  qty?: string | number;       // Modified quantity
+  tsym: string;                // Trading symbol (must be the same as original order)
+  ret?: string;                // Retention type (DAY/IOC/EOS)
+  trgprc?: string | number;    // Trigger price for SL-MKT or SL-LMT
+  bpprc?: string | number;     // Book profit price (for Bracket orders)
+  blprc?: string | number;     // Book loss price (for High Leverage and Bracket orders)
+  trailprc?: string | number;  // Trailing price (for High Leverage and Bracket orders)
+}
+
+// Interface for Modify Order response
+interface ModifyOrderResponse {
+  stat: string;        // Ok or Not_Ok
+  result?: string;     // Noren Order number if successful
+  request_time?: string;
+  emsg?: string;       // Error message if modification fails
+  [key: string]: any;
+}
+
+// Function to modify an order
+export const modifyOrder = async (params: ModifyPayload): Promise<ModifyOrderResponse> => {
+  console.log('Modifying order');
+  
+  const conf = new Config();
+  const config: ConfigType = {
+    id: process.env.ID || '',
+    password: process.env.PASSWORD || '',
+    api_key: process.env.API_KEY || '',
+    vendor_key: process.env.VENDOR_KEY || '',
+    imei: process.env.IMEI || '',
+    topt: process.env.TOTP || '',
+  };
+
+  try {
+    const token = await rest_authenticate(config);
+    if (!token) {
+      return {
+        stat: "Not_Ok",
+        emsg: "Token generation issue"
+      };
+    }
+
+    // Add user ID to the params
+    params.uid = config.id;
+
+    // Construct the payload
+    const payload = "jData=" + JSON.stringify(params) + `&jKey=${token}`;
+    
+    console.log('Modifying order with params:', {
+      ...params,
+      // Hide sensitive data in logs
+    });
+    
+    const modifyResponse = await axios.post(conf.MODIFY_ORDER_URL, payload);
+    return modifyResponse.data;
+  } catch (error: any) {
+    console.error('Error modifying order:', error);
+    return {
+      stat: "Not_Ok",
+      request_time: new Date().toISOString(),
+      emsg: error.message || "An error occurred while modifying the order",
+      error_details: error.response ? error.response.data : null
+    };
+  }
+};

@@ -15,6 +15,9 @@ class Config {
   GET_QUOTES_URL: string = `${this.BASE_URL}/GetQuotes`;
   ORDER_MARGIN_URL: string = `${this.BASE_URL}/GetOrderMargin`;
   ORDER_BOOK_URL: string = `${this.BASE_URL}/OrderBook`;
+  TRADE_BOOK_URL: string = `${this.BASE_URL}/TradeBook`;
+  MODIFY_ORDER_URL: string = `${this.BASE_URL}/ModifyOrder`;
+
 }
 
 export default Config;
