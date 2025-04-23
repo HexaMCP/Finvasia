@@ -305,7 +305,7 @@ export const getOrderMargin = async (params: OrderMarginParams): Promise<OrderMa
     // Required parameters for order margin calculation - convert all to strings
     const orderParams: Record<string, string> = {
       uid: config.id,
-      actid: params.actid || config.id,
+      actid: config.id,
       exch: String(params.exch),
       tsym: String(params.tsym),
       qty: String(params.qty),
@@ -335,6 +335,12 @@ export const getOrderMargin = async (params: OrderMarginParams): Promise<OrderMa
 
     const margin_response = await axios.post(conf.ORDER_MARGIN_URL, payload);
     console.log('Order margin response received');
+
+    if(margin_response.data.stat === "Ok") {
+      margin_response.data["available_cash"] = margin_response.data.cash;
+      delete margin_response.data.cash;
+      delete margin_response.data.ordermargin
+    }
 
     return margin_response.data;
   } catch (error: any) {
@@ -538,6 +544,69 @@ export const modifyOrder = async (params: ModifyPayload): Promise<ModifyOrderRes
       stat: "Not_Ok",
       request_time: new Date().toISOString(),
       emsg: error.message || "An error occurred while modifying the order",
+      error_details: error.response ? error.response.data : null
+    };
+  }
+};
+
+interface SingleOrderHistoryParams {
+  norenordno: string;
+}
+
+interface SingleOrderHistoryResponse {
+  [key: string]: any;
+
+}
+
+export const getOrderHistory = async (params: SingleOrderHistoryParams): Promise<SingleOrderHistoryResponse> => {
+  console.log('Fetching single order history');
+ 
+  // Get credentials from environment variables
+  const config: ConfigType = {
+    id: process.env.ID || "",
+    password: process.env.PASSWORD || "",
+    api_key: process.env.API_KEY || "",
+    vendor_key: process.env.VENDOR_KEY || "",
+    imei: process.env.IMEI || "",
+    topt: process.env.TOTP || "",
+  };
+ 
+  try {
+    // Authenticate first to get the token
+    const token = await rest_authenticate(config);
+ 
+    if (!token || token.length === 0) {
+      console.log('Token is empty');
+      return {
+        stat: "Not_Ok",
+        message: "Token generation issue"
+      };
+    }
+ 
+    // Create the request parameters
+    const orderHistoryParams = {
+      uid: config.id,
+      norenordno: params.norenordno
+    };
+ 
+    // Construct the payload
+    let payload = 'jData=' + JSON.stringify(orderHistoryParams);
+    payload = payload + `&jKey=${token}`;
+ 
+    console.log('Requesting single order history with params:', {
+      norenordno: params.norenordno
+    });
+    
+    const historyResponse = await axios.post(conf.BASE_URL + '/SingleOrdHist', payload);
+    console.log('Single order history response received');
+ 
+    return historyResponse.data;
+  } catch (error: any) {
+    console.error('Error fetching single order history:', error);
+    return {
+      stat: "Not_Ok",
+      request_time: new Date().toISOString(),
+      emsg: error.message || "An error occurred while fetching order history",
       error_details: error.response ? error.response.data : null
     };
   }

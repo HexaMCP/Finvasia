@@ -10,7 +10,7 @@ import { getProfile } from "./services/users/profile";
 import { checkBalance } from "./services/users/balance";
 import { getWatchlist } from "./services/stocks/watchlist";
 import { getQuotes, getStockList } from "./services/stocks/stocklist";
-import { cancelOrder, checkOrderStatus, getHoldings, getOrderBook, getOrderMargin, getPositions, placeOrder , getTradeBook, modifyOrder} from "./services/orders/order";
+import { cancelOrder, checkOrderStatus, getHoldings, getOrderBook, getOrderMargin, getPositions, placeOrder , getTradeBook, modifyOrder, getOrderHistory} from "./services/orders/order";
 
 
 const server = new Server(
@@ -26,7 +26,7 @@ const server = new Server(
 );
 
 const searchStocksSchema = z.object({
-  stext: z.string().describe("Search text (e.g., stock name or sector)"),
+  stext: z.string().describe("Search text (e.g., stock name or sector or strike price)"),
   exch: z.enum(["NSE", "BSE", "NFO"]).optional().describe("Exchange (NSE, BSE, NFO)"),
 });
 
@@ -92,8 +92,8 @@ const orderMarginSchema = z.object({
   actid: z.string().describe("Account ID (optional)"),
   exch: z.string().describe("Exchange (e.g., NSE, BSE)"),
   tsym: z.string().describe("Trading symbol"),
-  qty: z.union([z.string(), z.number()]).describe("Order quantity"),
-  prc: z.union([z.string(), z.number()]).describe("Order price"),
+  qty: z.string().describe("Order quantity"),
+  prc: z.string().describe("Order price"),
   prd: z.enum(["C", "M", "I", "B", "H"]).describe("Product type (e.g., C / M / H , C For CNC, M FOR NRML, I FOR MIS, B FOR BRACKET ORDER, H FOR COVER ORDER)"),
   trantype: z.string().describe("Transaction type (B for Buy, S for Sell)"),
   prctyp: z.string().describe("Price type (LMT, MKT, SL-LMT, SL-MKT)"),
@@ -200,6 +200,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "Finvasia_ModifyOrder",
         description: "Modify an existing open order",
         inputSchema: zodToJsonSchema(ModifyOrderSchema),
+      },{
+        name: "Get_Order_History",
+        description: "Get the detailed order history of a specific order by its order number",
+        inputSchema: zodToJsonSchema(SingleOrderHistorySchema),
       }
     ],
   };
@@ -569,16 +573,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const params = {
           exch: String(args.exch || ''),
           tsym: String(args.tsym || ''),
-          qty: args.qty as string | number,
-          prc: args.prc as string | number,
-          prd: String(args.prd || 'C'),
+          qty: args.qty as string,
+          prc: args.prc as string,
+          prd: args.prd && args.exch == "NFO" ? "M" :args.prd ? args.prd as string : "C",
           trantype: String(args.trantype || ''),
           prctyp: String(args.prctyp || ''),
-          actid: args.actid as string,
-          trgprc: args.trgprc as string | number,
-          blprc: args.blprc as string | number,
-          fillshares: args.fillshares as string | number,
-          norenordno: args.norenordno as string
+          trgprc: args.trgprc as string || '',
+          blprc: args.blprc as string | '',
+          fillshares: args.fillshares as string |'',
+          norenordno: args.norenordno as string | ""
         };
 
         try {
@@ -744,6 +747,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           };
         }
       }
+      case "Get_Order_History": {
+          const { norenordno } = request.params.arguments as { norenordno: string };
+          const orderHistory = await getOrderHistory({ norenordno });
+          
+          if (typeof orderHistory === "object" && orderHistory !== null && "stat" in orderHistory && orderHistory["stat"] === "Ok") {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify(orderHistory, null, 2),
+                },
+              ],
+            };
+          }
+          return {
+            content: [
+              {
+                type: "text",
+                text: `${JSON.stringify(orderHistory, null, 2)}`,
+              },
+            ],
+          };
+        }
+           
       default:
         throw new Error(`Unknown tool: ${request.params.name}`);
     }
