@@ -22,9 +22,6 @@ A Node.js-based server that connects to **Finvasia's Market Connect Protocol (MC
 
 More features and modules will be added progressively.
 
-
-More features and modules will be added progressively.
-
 ## 🛠️ Tech Stack
 
 - **Backend**: Node.js
