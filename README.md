@@ -51,9 +51,16 @@ cd Finvasia
 npm install
 ```
 
-### 3. Build the Project
+### 3. Build the Project for stdio setup
+
 ```bash
 npm run build
+```
+
+### 4. Build and start the Project for SSE setup
+
+```bash
+npm run start
 ```
 
 ## 🔐 Environment Setup
@@ -67,7 +74,7 @@ API_KEY="Your API Key"
 TOTP="Your TOTP Code"
 ```
 
-## ⚙️ MCP Configuration
+## ⚙️ MCP Configuration for stdio
 
 In your mcp config json, add the following configuration block:
 
@@ -77,7 +84,7 @@ In your mcp config json, add the following configuration block:
     "type": "stdio",
     "command": "node",
     "args": [
-      "Path of your index.js"
+      "Path/to/your/index.js"
     ],
     "env": {
       "ID": "{}",
@@ -87,6 +94,20 @@ In your mcp config json, add the following configuration block:
       "API_KEY": "{}",
       "TOTP": "{}"
     }
+  }
+}
+
+
+```
+## ⚙️ MCP Configuration for SSE
+
+In your mcp config json, add the following configuration block:
+
+```json
+{
+  "Your MCP project name": {
+    "type": "sse",
+    "url": "http://localhost:3000",
   }
 }
 ```
