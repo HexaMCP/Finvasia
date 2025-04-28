@@ -46,20 +46,10 @@ cd Finvasia
 npm install
 ```
 
-### 3. Build the Project
+## 🔐 3. Environment Setup
 
-```bash
-npm run build
-```
-
-### 4. Start the Project for SSE setup
-
-```bash
-npm run start
-```
-
-## 🔐 Environment Setup
 Create a .env file in the root directory with the following keys from Finvasia:
+
 ```bash
 ID="Your Finvasia ID"
 PASSWORD="Your Password"
@@ -69,32 +59,26 @@ API_KEY="Your API Key"
 TOTP="Your TOTP Code"
 ```
 
-## ⚙️ MCP Configuration for stdio
+### 4. Build the Project
 
-In your mcp config json, add the following configuration block:
-
-```json
-{
-  "Your MCP project name": {
-    "type": "stdio",
-    "command": "node",
-    "args": [
-      "Path/to/your/index.js"
-    ],
-    "env": {
-      "ID": "{}",
-      "PASSWORD": "{}",
-      "VENDOR_KEY": "{}",
-      "IMEI": "{}",
-      "API_KEY": "{}",
-      "TOTP": "{}"
-    }
-  }
-}
-
-
+```bash
+npm run build
 ```
-## ⚙️ MCP Configuration for SSE
+
+### 5. Start the Project
+
+```bash
+npm start
+```
+
+After running this command, the MCP server will start and listen on port 3000.
+
+You should see a message like:
+
+Finvasia MCP Server running on http://localhost:3000
+
+````
+### ⚙️ MCP Configuration for SSE
 
 In your mcp config json, add the following configuration block:
 
@@ -105,25 +89,14 @@ In your mcp config json, add the following configuration block:
     "url": "http://localhost:3000",
   }
 }
-```
+````
+
 🗂️ Where to add this configuration:
 
 For VS Code users, this config should be placed inside your settings.json.
-
-Replace "Path of your index.js" with the actual relative path to the built file, e.g., dist/index.js.
-
 
 ## 📞 Support
 
 For any issues or assistance with the integration, please contact **[blaze.ws](https://blaze.ws)** for support.
 
 You can reach out to us for troubleshooting, feature requests, or any general inquiries related to this MCP integration.
-
-
-
-
-
-
-
-
-
