@@ -46,13 +46,13 @@ cd Finvasia
 npm install
 ```
 
-### 3. Build the Project for stdio setup
+### 3. Build the Project
 
 ```bash
 npm run build
 ```
 
-### 4. Build and start the Project for SSE setup
+### 4. Start the Project for SSE setup
 
 ```bash
 npm run start
