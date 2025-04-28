@@ -2,6 +2,8 @@ import Config from "../config/config";
 import axios from "axios";
 import { rest_authenticate } from "../utils/auth";
 import 'dotenv/config';
+import fs from 'fs';
+import path from 'path';
 
 
 const conf = new Config();
@@ -17,7 +19,7 @@ interface AuthConfig {
 
 interface StockListParams {
   query: string;
-  exchange: string;
+  exchange: string; // Can be 'NSE', 'BSE', 'NFO', 'ALL'
 }
 
 interface StockListResponse {
@@ -27,7 +29,10 @@ interface StockListResponse {
 const getStockList = async ({
   query,
   exchange,
-}: StockListParams): Promise<StockListResponse | string> => {
+  limit = 100,
+  offset = 0
+}: StockListParams & { limit?: number; offset?: number }): Promise<StockListResponse> => {
+
   const config: AuthConfig = {
     id: process.env.ID || "",
     password: process.env.PASSWORD || "",
@@ -38,30 +43,83 @@ const getStockList = async ({
   };
 
   try {
-    const token = await rest_authenticate(config);
-    if (token.length === 0) {
-      return "Token generation issue";
+    const filePath = path.resolve(__dirname, '../../merged_instruments.json');
+    if (!fs.existsSync(filePath)) {
+      return { stat: "Not_Ok", emsg: "Instruments file not found" };
     }
 
-    const values: Record<string, string> = {
-      uid: config.id,
-      stext: query,
-      exch: exchange,
-    };
+    const fileContent = fs.readFileSync(filePath, 'utf8');
+    const data = JSON.parse(fileContent);
 
-    let payload = "jData=" + JSON.stringify(values) + `&jKey=${token}`;
-    const stockListResponse = await axios.post(conf.StockList_URL, payload);
+    const normalizedQuery = query.toUpperCase().trim();
 
-    if (stockListResponse.data["stat"] === "Ok") {
-      const data = stockListResponse.data;
-      console.log(data, "stockList");
-      return data;
+    // Determine which exchanges to search
+    let exchangesToSearch: string[];
+    if (exchange.toUpperCase() === 'ALL') {
+      // Search all available exchanges
+      exchangesToSearch = Object.keys(data);
     } else {
-      return "Try a different stock symbol or name.";
+      // Search only the specified exchange
+      exchangesToSearch = [exchange.toUpperCase()];
+    }
+
+    let allResults: any[] = [];
+
+    // Search across all specified exchanges
+    for (const exch of exchangesToSearch) {
+      const exchangeInstruments = data[exch] || [];
+
+      const results = exchangeInstruments.filter((instrument: any) => {
+        return (
+          (instrument.Symbol && instrument.Symbol.toUpperCase().includes(normalizedQuery)) ||
+          (instrument.TradingSymbol && instrument.TradingSymbol.toUpperCase().includes(normalizedQuery))
+        );
+      });
+
+      // Add exchange info to results
+      allResults = [...allResults, ...results];
+    }
+
+    if (allResults.length > 0) {
+      const slicedResults = allResults.slice(offset, offset + limit);
+      return {
+        stat: "Ok",
+        values: slicedResults,
+        total: allResults.length,
+        limit,
+        offset,
+        request_time: new Date().toISOString()
+      };
+    } else {
+      const token = await rest_authenticate(config);
+      if (token.length === 0) {
+        return { status: "failed", message: "Token generation issue" };
+      }
+
+      const values: Record<string, string> = {
+        uid: config.id,
+        stext: query,
+        exch: exchange,
+      };
+
+      let payload = "jData=" + JSON.stringify(values) + `&jKey=${token}`;
+      const stockListResponse = await axios.post(conf.StockList_URL, payload);
+
+      if (stockListResponse.data["stat"] === "Ok") {
+        const data = stockListResponse.data;
+        console.log(data, "stockList");
+        return data;
+      } else {
+        return stockListResponse.data;
+      }
     }
   } catch (error: any) {
-    console.error("Error fetching stock list:", error);
-    return `An error occurred while fetching the stock list. ` + error.message;
+    console.error("Search error:", error);
+    return {
+      stat: "Not_Ok",
+      emsg: `Search error: ${error.message}`,
+      request_time: new Date().toISOString()
+    };
   }
 };
 

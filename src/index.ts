@@ -1,9 +1,11 @@
+import express from "express";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import cron from 'node-cron';
 import { z } from "zod";
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { getProfile } from "./services/users/profile";
@@ -11,7 +13,7 @@ import { checkBalance } from "./services/users/balance";
 import { getWatchlist } from "./services/stocks/watchlist";
 import { getQuotes, getStockList } from "./services/stocks/stocklist";
 import { cancelOrder, checkOrderStatus, getHoldings, getOrderBook, getOrderMargin, getPositions, placeOrder , getTradeBook, modifyOrder} from "./services/orders/order";
-
+import { updateInstruments } from './updateInstruments';
 
 const server = new Server(
   {
@@ -200,7 +202,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "Finvasia_ModifyOrder",
         description: "Modify an existing open order",
         inputSchema: zodToJsonSchema(ModifyOrderSchema),
-      }
+      }    
     ],
   };
 });
@@ -757,14 +759,59 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
-async function runServer() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.log(JSON.stringify({ message: "Finvasia MCP Server running on stdio" }));
-}
+// Create Express app
+const app = express();
+app.use(express.json());
 
-runServer().catch((error) => {
-  console.error("Fatal error in main():", error);
-  process.exit(1);
+// Store SSE transports
+const sseTransports: Record<string, SSEServerTransport> = {};
+
+// SSE endpoint for clients
+app.get('/', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  
+  // Create SSE transport
+  const transport = new SSEServerTransport('/messages', res);
+  sseTransports[transport.sessionId] = transport;
+  
+  console.log(`New SSE connection established: ${transport.sessionId}`);
+  
+  // res.on("close", () => {
+  //   console.log(`SSE connection closed: ${transport.sessionId}`);
+  //   delete sseTransports[transport.sessionId];
+  // });
+  
+  await server.connect(transport);
+});
+
+// Message endpoint for SSE clients
+app.post('/messages', async (req, res) => {
+  const sessionId = req.query.sessionId as string;
+  const transport = sseTransports[sessionId];
+  
+  if (transport) {
+    await transport.handlePostMessage(req, res, req.body);
+  } else {
+    res.status(400).send('No transport found for sessionId');
+  }
+});
+// Schedule daily at 2 AM
+cron.schedule('0 2 * * *', async () => {
+  console.log('Running scheduled instrument data update...');
+  try {
+    await updateInstruments();
+    console.log('Instrument data update completed successfully');
+  } catch (error) {
+    console.error('Instrument data update failed:', error);
+  }
+});
+
+console.log('Scheduled Stock data updates enabled (daily at 2 AM)');
+// Start the server
+const PORT = 3000;
+app.listen(PORT, () => {
+  console.log(`Finvasia MCP Server running on http://localhost:${PORT}`);
 });
 
