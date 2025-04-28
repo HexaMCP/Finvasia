@@ -19,20 +19,46 @@ interface AuthConfig {
 
 interface StockListParams {
   query: string;
-  exchange: string; // Can be 'NSE', 'BSE', 'NFO', 'ALL'
+  exchange: string;
+  instrumentType?: string; // FUTIDX, OPTIDX, etc.
+  optionType?: string; // CE, PE
+  expiryMonth?: string; // May, Jun, etc.
+  expiryYear?: string; // 2025, etc.
 }
 
 interface StockListResponse {
-  [key: string]: any;
+  stat: string;
+  values?: any[];
+  total?: number;
+  limit?: number;
+  offset?: number;
+  request_time?: string;
+  emsg?: string;
+  expiryDates?: string[]; // Available expiry dates
+  expiryMonths?: string[]; // Available expiry months
+  availableStrikes?: number[]; // <-- Add this line
+  status?: string;
+  message?: string;
 }
-
 const getStockList = async ({
   query,
   exchange,
+  instrumentType,
+  optionType,
+  expiryMonth,
+  expiryYear,
+  strikePrice,
+  minStrike,
+  maxStrike,
   limit = 100,
   offset = 0
-}: StockListParams & { limit?: number; offset?: number }): Promise<StockListResponse> => {
-
+}: StockListParams & { 
+  limit?: number; 
+  offset?: number;
+  strikePrice?: number;
+  minStrike?: number;
+  maxStrike?: number;
+}): Promise<StockListResponse> => {
   const config: AuthConfig = {
     id: process.env.ID || "",
     password: process.env.PASSWORD || "",
@@ -43,75 +69,174 @@ const getStockList = async ({
   };
 
   try {
-    const filePath = path.resolve(__dirname, '../../merged_instruments.json');
-    if (!fs.existsSync(filePath)) {
-      return { stat: "Not_Ok", emsg: "Instruments file not found" };
-    }
+    // Only use local file if both exchange is NFO and query includes BANKNIFTY
+    const useLocalFile = exchange.toUpperCase() === 'NFO' || 
+                         query.toUpperCase().includes('BANKNIFTY');
+    
+    let localFileProcessed = false;
+    
+    if (useLocalFile) {
+      try {
+        const filePath = path.resolve(__dirname, '../../merged_instruments.json');
+        const fileContent = fs.readFileSync(filePath, 'utf8');
+        const data = JSON.parse(fileContent);
 
-    const fileContent = fs.readFileSync(filePath, 'utf8');
-    const data = JSON.parse(fileContent);
+        const normalizedQuery = query.toUpperCase().trim();
+        const exchangeInstruments = data['NFO'] || [];
 
-    const normalizedQuery = query.toUpperCase().trim();
+        // Filter instruments
+        let filteredResults = exchangeInstruments.filter((instrument: any) => {
+          // First check if it contains BANKNIFTY
+          const matchesQuery = 
+            (instrument.Symbol && instrument.Symbol.toUpperCase().includes(normalizedQuery)) ||
+            (instrument.TradingSymbol && instrument.TradingSymbol.toUpperCase().includes(normalizedQuery));
+            
+          if (!matchesQuery) return false;
+          
+          // Filter by option type
+          if (optionType && instrument.OptionType !== optionType) {
+            return false;
+          }
 
-    // Determine which exchanges to search
-    let exchangesToSearch: string[];
-    if (exchange.toUpperCase() === 'ALL') {
-      // Search all available exchanges
-      exchangesToSearch = Object.keys(data);
-    } else {
-      // Search only the specified exchange
-      exchangesToSearch = [exchange.toUpperCase()];
-    }
+          // Filter by expiry month
+          if (expiryMonth) {
+            if (!instrument.Expiry) return false;
+            
+            const expiryDate = new Date(instrument.Expiry);
+            if (isNaN(expiryDate.getTime())) return false;
+            
+            const monthName = expiryDate.toLocaleString('default', { month: 'short' });
+            if (normalizeMonthName(monthName) !== normalizeMonthName(expiryMonth)) {
+              return false;
+            }
+          }
 
-    let allResults: any[] = [];
+          // Filter by expiry year
+          if (expiryYear) {
+            if (!instrument.Expiry) return false;
+            
+            const expiryDate = new Date(instrument.Expiry);
+            if (isNaN(expiryDate.getTime())) return false;
+            
+            const year = expiryDate.getFullYear().toString();
+            if (year !== expiryYear) {
+              return false;
+            }
+          }
+          
+          // Filter by exact strike price if provided
+          if (strikePrice !== undefined) {
+            const instrumentStrike = parseFloat(instrument.StrikePrice);
+            if (isNaN(instrumentStrike) || instrumentStrike !== strikePrice) {
+              return false;
+            }
+          }
+          
+          // Filter by strike price range if provided
+          if (minStrike !== undefined || maxStrike !== undefined) {
+            const instrumentStrike = parseFloat(instrument.StrikePrice);
+            if (isNaN(instrumentStrike)) return false;
+            
+            if (minStrike !== undefined && instrumentStrike < minStrike) {
+              return false;
+            }
+            
+            if (maxStrike !== undefined && instrumentStrike > maxStrike) {
+              return false;
+            }
+          }
 
-    // Search across all specified exchanges
-    for (const exch of exchangesToSearch) {
-      const exchangeInstruments = data[exch] || [];
+          return true;
+        });
+        
+        // Collect expiry dates for filtered results
+        let allExpiryDates = new Set<string>();
+        let allExpiryMonths = new Set<string>();
+        let allStrikePrices = new Set<number>();
 
-      const results = exchangeInstruments.filter((instrument: any) => {
-        return (
-          (instrument.Symbol && instrument.Symbol.toUpperCase().includes(normalizedQuery)) ||
-          (instrument.TradingSymbol && instrument.TradingSymbol.toUpperCase().includes(normalizedQuery))
-        );
-      });
+        filteredResults.forEach((instrument: any) => {
+          if (instrument.Expiry) {
+            const expiryDate = new Date(instrument.Expiry);
+            if (!isNaN(expiryDate.getTime())) {
+              // Store full expiry date
+              allExpiryDates.add(instrument.Expiry);
+              
+              // Store month-year format
+              const month = expiryDate.toLocaleString('default', { month: 'short' });
+              const year = expiryDate.getFullYear();
+              allExpiryMonths.add(`${month}-${year}`);
+            }
+          }
+          
+          // Collect available strike prices
+          if (instrument.StrikePrice) {
+            const strike = parseFloat(instrument.StrikePrice);
+            if (!isNaN(strike)) {
+              allStrikePrices.add(strike);
+            }
+          }
+        });
 
-      // Add exchange info to results
-      allResults = [...allResults, ...results];
-    }
+        // Convert Sets to sorted arrays
+        const expiryDatesArray = Array.from(allExpiryDates)
+          .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+        
+        const expiryMonthsArray = Array.from(allExpiryMonths)
+          .sort((a, b) => {
+            const [monthA, yearA] = a.split('-');
+            const [monthB, yearB] = b.split('-');
+            const dateA = new Date(`${monthA} 1, ${yearA}`);
+            const dateB = new Date(`${monthB} 1, ${yearB}`);
+            return dateA.getTime() - dateB.getTime();
+          });
+          
+        const strikePricesArray = Array.from(allStrikePrices).sort((a, b) => a - b);
 
-    if (allResults.length > 0) {
-      const slicedResults = allResults.slice(offset, offset + limit);
-      return {
-        stat: "Ok",
-        values: slicedResults,
-        total: allResults.length,
-        limit,
-        offset,
-        request_time: new Date().toISOString()
-      };
-    } else {
-      const token = await rest_authenticate(config);
-      if (token.length === 0) {
-        return { status: "failed", message: "Token generation issue" };
+        if (filteredResults.length > 0) {
+          const slicedResults = filteredResults.slice(offset, offset + limit);
+          localFileProcessed = true;
+          return {
+            stat: "Ok",
+            values: slicedResults,
+            total: filteredResults.length,
+            limit,
+            offset,
+            expiryDates: expiryDatesArray,
+            expiryMonths: expiryMonthsArray,
+            availableStrikes: strikePricesArray,
+            request_time: new Date().toISOString()
+          };
+        }
+        else {
+          console.log("No results found in local file, falling back to API.");
+        }
+      } catch (fileError) {
+        console.log("Error accessing local file, falling back to API:");
+        // Continue to API call instead of exiting
       }
+    }
+    
+    // If not using local file or no results found, go to API
+    console.log("Proceeding with API call");
+    const token = await rest_authenticate(config);
+    if (token.length === 0) {
+      return { stat: "Not_Ok", emsg: "Token generation issue" };
+    }
 
-      const values: Record<string, string> = {
-        uid: config.id,
-        stext: query,
-        exch: exchange,
-      };
+    const values: Record<string, string> = {
+      uid: config.id,
+      stext: query,
+      exch: exchange,
+    };
 
-      let payload = "jData=" + JSON.stringify(values) + `&jKey=${token}`;
-      const stockListResponse = await axios.post(conf.StockList_URL, payload);
+    let payload = "jData=" + JSON.stringify(values) + `&jKey=${token}`;
+    const stockListResponse = await axios.post(conf.StockList_URL, payload);
 
-      if (stockListResponse.data["stat"] === "Ok") {
-        const data = stockListResponse.data;
-        console.log(data, "stockList");
-        return data;
-      } else {
-        return stockListResponse.data;
-      }
+    if (stockListResponse.data["stat"] === "Ok") {
+      const data = stockListResponse.data;
+      return data;
+    } else {
+      return stockListResponse.data;
     }
   } catch (error: any) {
     console.error("Search error:", error);
@@ -122,7 +247,29 @@ const getStockList = async ({
     };
   }
 };
-
+function normalizeMonthName(monthStr: string): string {
+  // Convert to lowercase and remove periods
+  const normalizedMonth = monthStr.toLowerCase().replace(/\./g, '');
+  
+  // Map of common month variations to standard 3-letter abbreviations
+  const monthMappings: Record<string, string> = {
+    'jan': 'jan', 'january': 'jan',
+    'feb': 'feb', 'february': 'feb',
+    'mar': 'mar', 'march': 'mar',
+    'apr': 'apr', 'april': 'apr',
+    'may': 'may',
+    'jun': 'jun', 'june': 'jun',
+    'jul': 'jul', 'july': 'jul',
+    'aug': 'aug', 'august': 'aug',
+    'sep': 'sep', 'sept': 'sep', 'september': 'sep',
+    'oct': 'oct', 'october': 'oct',
+    'nov': 'nov', 'november': 'nov',
+    'dec': 'dec', 'december': 'dec'
+  };
+  
+  // Try to map to standard format, or return original if no mapping found
+  return monthMappings[normalizedMonth] || normalizedMonth;
+}
 interface QuotesParams {
   exch: string;
   token: string;

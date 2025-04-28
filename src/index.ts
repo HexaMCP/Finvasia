@@ -27,9 +27,19 @@ const server = new Server(
   } 
 );
 
+
 const searchStocksSchema = z.object({
-  stext: z.string().describe("Search text (e.g., stock name or sector or strike price)"),
+  stext: z.string().describe("Search text (e.g., stock name or symbol)"),
   exch: z.enum(["NSE", "BSE", "NFO"]).optional().describe("Exchange (NSE, BSE, NFO)"),
+  instrumentType: z.string().optional().describe("Instrument type (e.g., FUTIDX, OPTIDX, EQ)"),
+  optionType: z.string().optional().describe("Option type (CE, PE)"),
+  expiryMonth: z.string().optional().describe("Expiry month (e.g., May, Jun, Jul)"),
+  expiryYear: z.string().optional().describe("Expiry year (e.g., 2025)"),
+  strikePrice: z.number().optional().describe("Exact strike price to filter (e.g., 50000)"),
+  minStrike: z.number().optional().describe("Minimum strike price (e.g., 45000)"),
+  maxStrike: z.number().optional().describe("Maximum strike price (e.g., 55000)"),
+   limit: z.number().optional().default(100).describe("Maximum number of data"),
+   offset: z.number().optional().default(0).describe("Number of data to skip"),
 });
 
 const placeOrderSchema = z.object({
@@ -280,13 +290,53 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
       case "Finvasia_Search_Stocks": {
-        const { stext, exch } = request.params.arguments as { stext?: string; exch?: string };
+        const { 
+          stext, 
+          exch, 
+          instrumentType, 
+          optionType, 
+          expiryMonth, 
+          expiryYear,
+          strikePrice,
+          minStrike,
+          maxStrike,
+          limit, 
+          offset
+        } = request.params.arguments as { 
+          stext?: string; 
+          exch?: string; 
+          instrumentType?: string;
+          optionType?: string;
+          expiryMonth?: string;
+          expiryYear?: string;
+          strikePrice?: number;
+          minStrike?: number;
+          maxStrike?: number;
+          limit?: number;
+          offset?: number;
+        };
+      
         try {
           const query = stext || "a";
           const exchange = exch || "NSE";
+          const limit_value = limit ? limit > 100 ? 100 : limit : 100;
 
-          const stocklist = await getStockList({ query, exchange });
-
+          
+          // Regular stock search with filters
+          const stocklist = await getStockList({ 
+            query, 
+            exchange, 
+            instrumentType, 
+            optionType, 
+            expiryMonth, 
+            expiryYear,
+            strikePrice,
+            minStrike,
+            maxStrike,
+            limit: limit_value, 
+            offset
+          });
+          
           if (typeof stocklist === "object" && stocklist !== null && "stat" in stocklist && stocklist["stat"] === "Ok") {
             return {
               content: [
@@ -297,7 +347,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               ],
             };
           }
-
+          
           return {
             content: [
               {

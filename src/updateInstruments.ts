@@ -40,8 +40,8 @@ async function updateInstruments() {
   try {
     const urls = [
       'https://api.shoonya.com/NFO_symbols.txt.zip',
-      'https://api.shoonya.com/NSE_symbols.txt.zip',
-      'https://api.shoonya.com/BSE_symbols.txt.zip'
+      // 'https://api.shoonya.com/NSE_symbols.txt.zip',
+      // 'https://api.shoonya.com/BSE_symbols.txt.zip'
     ];
 
     const buildDir = path.join(__dirname, 'build');
