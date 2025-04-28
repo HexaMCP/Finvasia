@@ -4,8 +4,6 @@ A Node.js-based server that connects to **Finvasia's Market Connect Protocol (MC
 
 ## 📌 Current Features
 
-## 📌 Current Features
-
 - 👤 Fetch **User Profile Data**
 - 💰 Fetch **Account Balance**
 - 🟢 **Buy Orders**
