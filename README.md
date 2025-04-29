@@ -71,13 +71,9 @@ npm run build
 npm start
 ```
 
-After running this command, the MCP server will start and listen on port 3000.
+Start the MCP server in your respective port (ex: http://localhost:3000)
 
-You should see a message like:
 
-Finvasia MCP Server running on http://localhost:3000
-
-````
 ### ⚙️ MCP Configuration for SSE
 
 In your mcp config json, add the following configuration block:
