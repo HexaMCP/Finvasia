@@ -2,6 +2,9 @@
 
 A Node.js-based server that connects to **Finvasia's Market Connect Protocol (MCP)** to enable seamless interaction with the Finvasia trading platform. This server acts as a bridge between Finvasia’s API and your trading application or frontend dashboard.
 
+![]([https://github.com/Your_Repository_Name/Your_GIF_Name.gif](https://github.com/HexaMCP/Finvasia/blob/main/main.py---telegram-mcp---Cursor-2025-05-02-12-17-03.gif))
+
+
 ## 📌 Current Features
 
 - 👤 Fetch **User Profile Data**
